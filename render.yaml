@@ -1,0 +1,8 @@
+# Configuración para publicar en Render (https://render.com): sirve el juego y el modo en red.
+services:
+  - type: web
+    name: vuelta-rapida
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vuelta Rápida</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0c0e14; }
+    canvas { display: block; }
+    /* viñeta: luz cálida al centro y bordes más oscuros (estilo maqueta) */
+    #vignette { position: fixed; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse at center, rgba(255,240,210,0.04) 45%, rgba(25,15,5,0.38) 100%); }
+    /* sala de espera del modo en red */
+    #lobby { display: none; position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box;
+      background: rgba(250,246,236,0.97); color: #2a2620; border-radius: 12px; padding: 22px 26px;
+      box-shadow: 4px 6px 0 rgba(30,20,10,0.25); font: 15px system-ui, sans-serif; z-index: 2; }
+    #lobby h1 { margin: 0 0 14px; color: #d9822b; font-size: 30px; text-align: center; }
+    #lobby .row { display: flex; justify-content: space-between; align-items: center; margin: 8px 0; gap: 12px; }
+    #lobby input, #lobby select { font: inherit; padding: 5px 8px; border: 1px solid #cbbfa8; border-radius: 6px; background: #fff; min-width: 190px; }
+    #lobby select:disabled { color: #2a2620; background: #f1ece0; }
+    #lb-players { margin: 12px 0; padding: 8px 10px; background: rgba(60,45,25,0.07); border-radius: 8px; }
+    #lb-players .pl { padding: 4px 0; font-weight: 600; }
+    #lb-players i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; vertical-align: -1px; }
+    #lb-players em { font-weight: 400; color: #776f62; font-size: 13px; }
+    #lb-status { margin: 12px 0; color: #776f62; min-height: 20px; }
+    #lb-status.err { color: #c0392b; }
+    #lobby .btns { display: flex; gap: 10px; }
+    #lobby button { flex: 1; font: bold 16px system-ui, sans-serif; padding: 10px; border: 0; border-radius: 8px; background: #d9822b; color: #fff; cursor: pointer; }
+    #lobby button.sec { background: rgba(60,45,25,0.12); color: #2a2620; }
+    #lb-urls { margin-top: 14px; font-size: 13px; color: #776f62; line-height: 1.6; }
+    #lobby .hint { margin-top: 10px; font-size: 12px; color: #776f62; text-align: center; }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="vignette"></div>
+  <script src="js/car.js"></script>
+  <script src="js/track.js"></script>
+  <script src="js/tracks.js"></script>
+  <script src="js/sim.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/art.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/net.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
