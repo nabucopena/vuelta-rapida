@@ -16,7 +16,7 @@ const Game = {
   state: 'menu',               // menu | lobby | countdown | race | results | preview
   paused: false,
   debug: false,
-  settings: { players: 2, laps: 3, damage: true, track: 0 },
+  settings: { players: 2, laps: 3, damage: true, track: 0, ai: 0 },
   menuSel: 0, pauseSel: 0,
   sim: null,
   cars: [], props: [], particles: [], results: [],
@@ -39,7 +39,11 @@ const Game = {
       if (this.mode === 'local' && this.sim && !this.paused && racing) {
         acc += dt;
         let n = 0;
-        while (acc >= SIM_DT && n++ < 48) { this.sim.step(SIM_DT, car => Input.forPlayer(car.player)); acc -= SIM_DT; }
+        const tr = this.track;
+        while (acc >= SIM_DT && n++ < 48) {
+          this.sim.step(SIM_DT, car => car.player.ai ? AI.drive(car, tr) : Input.forPlayer(car.player));
+          acc -= SIM_DT;
+        }
         if (n >= 48) acc = 0;
         this.syncFromSim();
         this.frameUpdate(dt);
@@ -78,15 +82,26 @@ const Game = {
       items.push({ label: 'Jugadores', value: s.players });
       items.push({ label: 'Vueltas', value: s.laps });
       items.push({ label: 'Daño por golpes', value: s.damage ? 'Sí' : 'No' });
+      items.push({ label: 'Piloto automático', value: ['No', 'J2', 'J1 y J2'][s.ai] });
     }
+    items.push({ label: 'Controles' });
     items.push({ label: net ? 'ENTRAR A LA SALA' : 'EMPEZAR' });
     return items;
+  },
+  // filas de la pantalla de controles: [jugador, acción] o comandos
+  controlRows() {
+    const rows = [];
+    for (let pl = 0; pl < MAX_LOCAL_PLAYERS; pl++) for (const [a, label] of KEY_ACTIONS) rows.push({ pl, a, label });
+    rows.push({ cmd: 'reset', label: 'Restaurar teclas de fábrica' });
+    rows.push({ cmd: 'back', label: 'Volver' });
+    return rows;
   },
   pauseItems() { return ['Continuar', 'Reiniciar carrera', 'Salir al menú']; },
 
   handleKeys() {
     if (Input.pressed.size) Sound.init();
     if (this.state === 'lobby') return;                 // la sala usa sus propios controles
+    if (this.state === 'controls') { this.handleControlKeys(); return; }
     if (Input.wasPressed('KeyM')) Sound.toggleMute();
     if (Input.wasPressed('F3')) this.debug = !this.debug;
     const up = Input.wasPressed('ArrowUp', 'KeyW'), down = Input.wasPressed('ArrowDown', 'KeyS');
@@ -104,9 +119,11 @@ const Game = {
         if (label === 'Jugadores') s.players = Math.max(1, Math.min(MAX_LOCAL_PLAYERS, s.players + d));
         if (label === 'Vueltas') s.laps = Math.max(1, Math.min(20, s.laps + d));
         if (label === 'Daño por golpes') s.damage = !s.damage;
+        if (label === 'Piloto automático') { s.ai = (s.ai + d + 3) % 3; if (s.ai) s.players = 2; }
       }
       if (ok) {
-        if (this.mode === 'net') { this.state = 'lobby'; Net.open(); }
+        if (label === 'Controles') { this.state = 'controls'; this.ctrlSel = 0; this.capturing = null; this.ctrlMsg = ''; }
+        else if (this.mode === 'net') { this.state = 'lobby'; Net.open(); }
         else this.startRace();
       }
       return;
@@ -136,6 +153,29 @@ const Game = {
     if (Input.wasPressed('Escape', 'KeyP')) { this.paused = true; this.pauseSel = 0; }
   },
 
+  handleControlKeys() {
+    const rows = this.controlRows();
+    if (this.capturing) {
+      const code = [...Input.pressed][0];
+      if (!code) return;
+      if (code === 'Escape') { this.capturing = null; this.ctrlMsg = ''; return; }
+      if (['KeyM', 'KeyP', 'F3'].includes(code)) { this.ctrlMsg = `${keyName(code)} está reservada (silencio / pausa / telemetría). Elegí otra.`; return; }
+      Input.setKey(this.capturing.pl, this.capturing.a, code);
+      this.capturing = null; this.ctrlMsg = '';
+      return;
+    }
+    const n = rows.length;
+    if (Input.wasPressed('ArrowUp')) this.ctrlSel = (this.ctrlSel + n - 1) % n;
+    if (Input.wasPressed('ArrowDown')) this.ctrlSel = (this.ctrlSel + 1) % n;
+    if (Input.wasPressed('Escape', 'Backspace')) { this.state = 'menu'; return; }
+    if (Input.wasPressed('Enter', 'NumpadEnter', 'Space')) {
+      const r = rows[this.ctrlSel];
+      if (r.cmd === 'back') this.state = 'menu';
+      else if (r.cmd === 'reset') { Input.resetKeys(); this.ctrlMsg = 'Teclas restauradas.'; }
+      else { this.capturing = r; this.ctrlMsg = ''; }
+    }
+  },
+
   toMenu() {
     this.state = 'menu'; this.sim = null; this.cars = []; this.particles = []; this.cams = [];
     Art.resetMarks(this.track); this.props = this.track.makeProps();
@@ -145,7 +185,13 @@ const Game = {
   startRace() {
     const tr = this.track;
     Art.resetMarks(tr);
-    const players = PLAYER_DEFS.slice(0, this.settings.players).map((d, k) => Object.assign({ id: k, num: k + 1 }, d));
+    // con piloto automático: J2 (o ambos) los maneja la computadora
+    const ai = this.settings.ai, n = ai ? 2 : this.settings.players;
+    const players = PLAYER_DEFS.slice(0, n).map((d, k) => {
+      const pl = Object.assign({ id: k, num: k + 1 }, d);
+      if (ai === 2 || (ai === 1 && k === 1)) { pl.ai = true; pl.name = d.name + ' IA'; }
+      return pl;
+    });
     this.sim = new RaceSim(this.settings.track, this.settings, players, tr);
     this.cars = this.sim.cars; this.props = this.sim.props;
     for (const c of this.cars) this.prepCar(c);
@@ -304,6 +350,7 @@ const Game = {
     if (this.cams.length > 1) Render.drawDivider();
     if (this.state === 'preview') { this.drawPreviewMarks(); return; }
     if (this.state === 'menu') { Render.drawMenu(this); return; }
+    if (this.state === 'controls') { Render.drawControls(this); return; }
     if (this.state === 'lobby') return;
     Render.drawHUD(this);
     if (this.state === 'countdown' || (this.state === 'race' && this.raceTime < 1)) Render.drawCountdown(this);

@@ -29,6 +29,9 @@ En asfalto el auto casi no derrapa; en tierra, barro y nieve se dobla derrapando
 
 `Esc` pausa · `M` silencio · `F3` telemetría (para ajustar la física)
 
+**Controles editables:** en el menú, "Controles" (se guardan en el navegador).
+**Piloto automático:** en el menú, "Piloto automático: J2" para correr contra la computadora o "J1 y J2" para mirar la línea ideal.
+
 **Boxes** (Circuito del Parque): entrá a la calle de boxes (lado de afuera de la recta principal; el limitador te deja a 60 km/h) y frená dentro de un rectángulo amarillo. Mientras estés detenido ahí se repara el daño.
 
 > Muchos teclados no registran más de 3 o 4 teclas apretadas a la vez. Si con 2 jugadores en el mismo teclado alguna tecla "no entra", es por eso (ghosting del teclado).
@@ -42,7 +45,8 @@ En asfalto el auto casi no derrapa; en tierra, barro y nieve se dobla derrapando
 - `js/sim.js`: la carrera (física, vueltas, daño), compartida entre el modo local y el servidor.
 - `js/net.js`: modo en red del lado del navegador (sala, envío de controles, interpolación).
 - `server.js`: servidor de red local (archivos del juego + WebSocket).
-- `js/input.js`: teclas por jugador (`PLAYER_DEFS`).
+- `js/input.js`: teclas por jugador (`PLAYER_DEFS`) y teclas personalizadas.
+- `js/ai.js`: piloto automático (línea de carrera + velocidad por curva y terreno).
 - `js/game.js`: estados, vueltas, daño, boxes y cámara.
 - `js/render.js`: gráficos y HUD.
 - `js/audio.js`: sonido sintetizado.

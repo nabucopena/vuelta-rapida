@@ -74,8 +74,10 @@ const CAR_PARAMS = {
   steerRampSpeed: 70,    // m/s: a esta velocidad la rampa tarda el doble
   steerReturnTime: 0.12, // s para volver al centro al soltar
   steerCurve: 1.4,       // >1 = el primer tramo del volante gira poco (correcciones suaves)
-  steerAssistGain: 0.35, // asistencia suave a la dirección (0 = apagada)
-  steerAssistMax: 0.05,  // rad: lo máximo que la asistencia puede girar la rueda (~3°)
+  steerAssistGain: 1.0, // asistencia suave a la dirección (0 = apagada)
+  steerHighSpeedRef: 45,  // m/s: a esta velocidad el volante pierde la mitad de sensibilidad (efecto ^4)
+  yawDampSteering: 1,      // amortiguación de rotación mientras se hacen correcciones chicas (0..1)
+  steerAssistMax: 0.09,  // rad: lo máximo que la asistencia puede girar la rueda (~5°)
   steerLoadGain: 1.0,    // cuánto más se puede girar con la trompa cargada (frenando)
   steerReturnRate: 8,    // rad/s al volver al centro
   escStrength: 20000,    // N·m por rad de derrape: control de estabilidad
@@ -87,7 +89,7 @@ const CAR_PARAMS = {
   // --- comportamiento en terreno suelto (multiplicados por "loose" del terreno)
   looseSoftness: 0.5,    // neumático más progresivo (pico a mayor ángulo)
   looseRearLoss: 0.06,   // la cola agarra un poco menos que la trompa => tiende a derrapar
-  looseEscCut: 0.75,     // cuánto se apaga el control de estabilidad
+  looseEscCut: 0.4,     // cuánto se apaga el control de estabilidad
   loosePowerSlide: 0.35,  // cuánto acelerador se deja pasar aunque la cola deslice
   looseCounterSteer: 1.5,// giro extra disponible para contravolantear
   looseSteerBoost: 0.4,  // giro extra a baja velocidad
@@ -98,7 +100,7 @@ const CAR_PARAMS = {
 
   damagePowerLoss: 0.45, // con 100% de daño pierde 45% de potencia
   damageGripLoss: 0.2,   // y 20% de agarre
-  damageSteerPull: 0.035 // y la dirección "tira" hacia un lado (rad)
+  damageSteerPull: 0.015 // y la dirección "tira" hacia un lado (rad, a baja velocidad)
 };
 
 function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -177,15 +179,24 @@ class Car {
     //     Ángulo geométrico para doblar a steerGripG (escalado por el agarre del terreno)
     //     + el ángulo de máximo agarre + margen de contravolante en terreno suelto.
     const v2 = Math.max(speed, 1) ** 2;
+    // margen extra sólo para CONTRAVOLANTEAR (girar hacia el lado al que se escapa la cola);
+    // para doblar normal el límite es el mismo que en asfalto => los toques no se pasan
+    const slideR = Math.atan2(vy - this.omega * b, Math.max(Math.abs(vx), p.lowSpeed));
+    const counter = inp.steer * slideR > 0 && Math.abs(slideR) > peakR
+      ? Math.min(Math.abs(slideR), peakF * p.looseCounterSteer) * loose : 0;
+    const peakRef = Math.min(peakF, tirePeak(p.tireB, p.tireC, p.tireE) * 1.3);
+    // dirección menos sensible a muy alta velocidad (evita el zigzag al corregir con teclado)
+    const hsFactor = 1 / (1 + Math.pow(speed / p.steerHighSpeedRef, 4));
     const steerMax = Math.min(
       p.maxSteer * (1 + p.looseSteerBoost * loose),
       (L * p.steerGripG * GRAVITY * (gripF + gripR) / 2) * Math.pow(frontLoad, p.steerLoadGain) / v2
-        + peakF * (p.steerAssist + p.looseCounterSteer * loose));
+        + peakRef * p.steerAssist * hsFactor + counter);
     // Dirección progresiva (pensada para teclado): mantener la tecla va girando de a poco,
     // con una curva suave al principio => los toques cortos corrigen poquito.
     const ramp = p.steerRampTime * (1 + speed / p.steerRampSpeed);
     const goingOut = Math.abs(inp.steer) > Math.abs(this.steerIn) && inp.steer * this.steerIn >= 0;
-    this.steerIn = approach(this.steerIn, inp.steer, dt / (goingOut ? ramp : p.steerReturnTime));
+    // con entrada analógica (piloto automático o joystick) el volante va directo, sin rampa de teclado
+    this.steerIn = inp.analog ? inp.steer : approach(this.steerIn, inp.steer, dt / (goingOut ? ramp : p.steerReturnTime));
     const shaped = Math.sign(this.steerIn) * Math.pow(Math.abs(this.steerIn), p.steerCurve);
     // Asistencia suave: (1) contravolante leve si la cola desliza; (2) sin tocar la dirección,
     // frena de a poco la rotación para que el auto siga derecho. Limitada a unos pocos grados.
@@ -194,10 +205,15 @@ class Car {
       const alphaRnow = Math.atan2(vy - this.omega * b, Math.max(Math.abs(vx), p.lowSpeed));
       const thr = peakR * 1.1;                     // sólo cuando la cola pasa su máximo agarre (se escapa)
       if (Math.abs(alphaRnow) > thr) assist += p.steerAssistGain * 2 * (alphaRnow - Math.sign(alphaRnow) * thr);
-      if (Math.abs(inp.steer) < 0.01) assist -= p.steerAssistGain * 0.6 * (this.omega * L / vx);
+      // amortiguación de la rotación: plena sin tocar la dirección, parcial mientras se corrige
+      const yawK = Math.abs(inp.steer) < 0.01 ? 1 : p.yawDampSteering * (1 - Math.abs(this.steerIn));
+      assist -= p.steerAssistGain * 0.6 * yawK * (this.omega * L / vx);
       assist = clamp(assist, -p.steerAssistMax, p.steerAssistMax);
     }
-    const target = shaped * steerMax + assist + dmg * p.damageSteerPull * this.damagePull;
+    // el daño "tira" la dirección hacia un lado, proporcional al giro disponible
+    // (a alta velocidad el giro máximo es chico, así que el tirón también)
+    const pull = dmg * p.damageSteerPull * this.damagePull * (steerMax / p.maxSteer);
+    const target = shaped * steerMax + assist + pull;
     const returning = Math.abs(target) < Math.abs(this.steer) || target * this.steer < 0;
     this.steer = approach(this.steer, target, (returning ? p.steerReturnRate : p.steerRate) * dt);
     const d = this.steer, cd = Math.cos(d), sd = Math.sin(d);

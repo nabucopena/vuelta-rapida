@@ -46,7 +46,7 @@ const Net = {
       <div id="lb-status"></div>
       <div class="btns"><button id="lb-start">Empezar carrera</button><button id="lb-leave" class="sec">Salir</button></div>
       <div id="lb-urls"></div>
-      <div class="hint">Controles: flechas o W A S D · M silencio</div>`;
+      <div class="hint" id="lb-hint"></div>`;
     document.body.appendChild(root);
     const $ = id => root.querySelector('#' + id);
     this.ui = { root, name: $('lb-name'), players: $('lb-players'), track: $('lb-track'), laps: $('lb-laps'),
@@ -75,6 +75,8 @@ const Net = {
 
   renderLobby() {
     const u = this.ui;
+    u.root.querySelector('#lb-hint').textContent =
+      `Controles: ${keysLabel(PLAYER_DEFS[0])} o ${keysLabel(PLAYER_DEFS[1])} · se cambian en el menú "Controles" · M silencio`;
     u.players.innerHTML = this.players.map(p =>
       `<div class="pl"><i style="background:${p.color}"></i>${p.name}${p.id === this.hostId ? ' <em>anfitrión</em>' : ''}${p.id === this.myId ? ' <em>vos</em>' : ''}</div>`).join('');
     const s = this.settings;

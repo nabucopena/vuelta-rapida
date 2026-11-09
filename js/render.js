@@ -373,7 +373,7 @@ const Render = {
       ctx.fillStyle = UI.ink; ctx.font = 'bold 15px system-ui, sans-serif';
       ctx.fillText(p.name, px + cw / 2, cy + 10);
       ctx.fillStyle = UI.dim; ctx.font = '13px system-ui, sans-serif';
-      ctx.fillText(p.label, px + cw / 2, cy + 30);
+      ctx.fillText(keysLabel(p), px + cw / 2, cy + 30);
     });
     ctx.textAlign = 'center'; ctx.fillStyle = UI.dim; ctx.font = '12px system-ui, sans-serif';
     const tr = game.track;
@@ -384,6 +384,41 @@ const Render = {
     ctx.fillText(TRACK_INFO(tr), this.W / 2, cy + 60);
     ctx.fillText('↑↓ elegir   ←→ cambiar   Enter empezar   ·   en carrera: Esc pausa, M silencio', this.W / 2, cy + 82);
     if (tr.def.pit) ctx.fillText('Boxes: entrá a la calle de boxes (60 km/h) y frená en un recuadro amarillo para reparar.', this.W / 2, cy + 100);
+  },
+
+  drawControls(game) {
+    const ctx = this.ctx, rows = game.controlRows();
+    this.screen();
+    const rh = 32, w = 520, h = 120 + rows.length * rh + 70 + 20, x = this.W / 2 - w / 2, y = Math.max(16, this.H / 2 - h / 2);
+    this.panel(x, y, w, h);
+    this.centerText([['CONTROLES', 'bold 32px system-ui, sans-serif', UI.accent]], y + 36);
+    ctx.font = '13px system-ui, sans-serif'; ctx.fillStyle = UI.dim; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('En red se puede usar cualquiera de los dos juegos de teclas.', this.W / 2, y + 68);
+    let yy = y + 96, lastPl = -1;
+    rows.forEach((r, i) => {
+      if (r.pl != null && r.pl !== lastPl) {              // encabezado de cada jugador
+        lastPl = r.pl; const p = PLAYER_DEFS[r.pl];
+        ctx.fillStyle = p.color; ctx.fillRect(x + 30, yy - 1, 4, 16);
+        ctx.fillStyle = UI.ink; ctx.font = 'bold 14px system-ui, sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText(p.name, x + 42, yy + 7); yy += 22;
+      }
+      if (r.cmd === 'reset') yy += 8;
+      const sel = i === game.ctrlSel, cap = game.capturing === r;
+      ctx.fillStyle = sel ? UI.accent : 'rgba(60,45,25,0.06)';
+      ctx.beginPath(); ctx.roundRect(x + 24, yy, w - 48, rh - 6, 7); ctx.fill();
+      ctx.fillStyle = sel ? '#fff' : UI.ink; ctx.font = (r.cmd ? 'bold ' : '') + '15px system-ui, sans-serif';
+      ctx.textBaseline = 'middle';
+      if (r.cmd) { ctx.textAlign = 'center'; ctx.fillText(r.label, this.W / 2, yy + (rh - 6) / 2); }
+      else {
+        ctx.textAlign = 'left'; ctx.fillText(r.label, x + 40, yy + (rh - 6) / 2);
+        ctx.textAlign = 'right'; ctx.font = 'bold 15px system-ui, sans-serif';
+        ctx.fillText(cap ? 'apretá una tecla…' : keyName(PLAYER_DEFS[r.pl].keys[r.a]), x + w - 40, yy + (rh - 6) / 2);
+      }
+      yy += rh;
+    });
+    ctx.textAlign = 'center'; ctx.font = '13px system-ui, sans-serif';
+    ctx.fillStyle = game.ctrlMsg && !/restauradas/.test(game.ctrlMsg) ? UI.bad : UI.dim;
+    ctx.fillText(game.ctrlMsg || (game.capturing ? 'Esc cancela' : '↑↓ elegir   Enter cambiar la tecla   Esc volver'), this.W / 2, yy + 16);
   },
 
   drawPause(game) {
